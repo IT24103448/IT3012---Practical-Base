@@ -1,6 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
+from agent import SearchAgent
 
 
 class VisualGridHuntGame:
@@ -53,9 +54,9 @@ class VisualGridHuntGame:
 
     def get_percept(self) -> dict:
         """
-        Step 1.1: Partial Observability
-        Returns ONLY local booleans and last move status.
-        No global coordinates (agent_pos), score, or opponent lists are exposed to the agent!
+        Lab 03 Step 1.1:
+        Returns local percept information together with
+        the global world model required by search algorithms.
         """
         x, y = self.agent_pos
 
@@ -86,7 +87,10 @@ class VisualGridHuntGame:
             "wall_ahead": wall_ahead,
             "food_here": tuple(self.agent_pos) in self.food_positions,
             "toxin_here": tuple(self.agent_pos) in self.toxic_traps,
-            "last_move_succeeded": self.last_move_succeeded
+            "last_move_succeeded": self.last_move_succeeded,
+            "grid_size": (self.width, self.height),
+            "walls": list(self.walls),
+            "all_food": list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -341,7 +345,7 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
-        self.agent = ModelBasedAgent()
+        self.agent = SearchAgent()
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 500x500 window ceiling
         max_canvas_dim = 500
