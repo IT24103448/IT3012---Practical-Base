@@ -1,5 +1,6 @@
 # agent.py
 import random
+import math
 from collections import deque
 import heapq
 
@@ -105,11 +106,27 @@ class SearchAgent:
     """
     def __init__(self):
         self.plan = []
-        self.active_algo = 'UCS'
+        self.active_algo = 'AStar'
 
         # Internal position tracker.
         # Environment starts the agent at (0, 0).
         self.current_pos = (0, 0)
+
+    def manhattan_distance(self, pos, goal):
+        """
+        Distance for four-way movement.
+        """
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+
+    def euclidean_distance(self, pos, goal):
+        """
+        Straight-line distance between two grid positions.
+        """
+        return math.sqrt(
+            (pos[0] - goal[0]) ** 2
+            + (pos[1] - goal[1]) ** 2
+        )
 
     def bfs_search(self, start_pos, goal_pos, walls, grid_size):
         width, height = grid_size
@@ -232,6 +249,88 @@ class SearchAgent:
 
         return None
 
+    def astar_search(
+        self,
+        start_pos,
+        goal_pos,
+        walls,
+        grid_size,
+        heuristic_type='manhattan'
+    ):
+        width, height = grid_size
+        walls_set = set(walls)
+
+        if heuristic_type == 'manhattan':
+            heuristic = self.manhattan_distance
+        elif heuristic_type == 'euclidean':
+            heuristic = self.euclidean_distance
+        else:
+            raise ValueError(
+                "heuristic_type must be 'manhattan' or 'euclidean'"
+        )
+
+        priority_queue = []
+
+        # Initial node:
+        # g(n) = 0
+        # f(n) = g(n) + h(n)
+        start_g = 0
+        start_h = heuristic(start_pos, goal_pos)
+        start_f = start_g + start_h
+
+        heapq.heappush(
+            priority_queue,
+            (start_f, start_g, start_pos, [])
+        )
+
+        reached_states = set()
+
+        moves = [
+            ((0, 1), 'Up'),
+            ((0, -1), 'Down'),
+            ((-1, 0), 'Left'),
+            ((1, 0), 'Right')
+        ]
+
+        while priority_queue:
+            f_cost, g_cost, current_pos, path_taken = heapq.heappop(
+                priority_queue
+            )
+
+            if current_pos in reached_states:
+                continue
+
+            if current_pos == goal_pos:
+                return path_taken
+
+            reached_states.add(current_pos)
+
+            for (dx, dy), action_name in moves:
+                nx = current_pos[0] + dx
+                ny = current_pos[1] + dy
+                next_pos = (nx, ny)
+
+                valid_position = (
+                    0 <= nx < width
+                    and 0 <= ny < height
+                    and next_pos not in walls_set
+                    and next_pos not in reached_states
+                )
+
+                if valid_position:
+                    new_g = g_cost + 1
+                    new_h = heuristic(next_pos, goal_pos)
+                    new_f = new_g + new_h
+
+                    new_path = path_taken + [action_name]
+
+                    heapq.heappush(
+                        priority_queue,
+                        (new_f, new_g, next_pos, new_path)
+                    )
+
+        return None
+
     def sense_and_act(self, percept: dict) -> str:
         # If the agent is currently standing on food, collect it first
         if percept.get('food_here'):
@@ -279,6 +378,14 @@ class SearchAgent:
                     closest_food,
                     walls,
                     grid_size
+                )
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(
+                    self.current_pos,
+                    closest_food,
+                    walls,
+                    grid_size,
+                    heuristic_type='manhattan'
                 )
             else:
                 raise ValueError(
