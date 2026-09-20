@@ -18,7 +18,7 @@ class GridHuntGame:
         self.score = 0
         self.steps = 0
 
-    def _is_wall_ahead((self) -> bool:
+    def _is_wall_ahead(self) -> bool:
         x, y = self.agent_pos
         if self.agent_dir == 'Up':
             next_pos = (x, y + 1)
