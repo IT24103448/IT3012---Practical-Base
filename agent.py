@@ -3,6 +3,7 @@ import random
 import math
 from collections import deque
 import heapq
+from logic_engine import KnowledgeBase
 
 
 class SimpleReflexAgent:
@@ -102,11 +103,15 @@ class GreedyGridAgent:
 
 class SearchAgent:
     """
-    Problem-Solving Agent using Breadth-First Search (BFS) for navigation.
+    Planning agent with BFS, DFS, UCS, and logic-constrained A* navigation.
     """
     def __init__(self):
         self.plan = []
         self.active_algo = 'AStar'
+
+        self.kb = KnowledgeBase()
+        self.kb.tell_rule(['TargetVisible', 'HasDust'], 'SafeToEngage')
+        self.kb.tell_rule(['SafeToEngage', 'BloodseekerMissing'], 'Retreat')
 
         # Internal position tracker.
         # Environment starts the agent at (0, 0).
@@ -255,8 +260,11 @@ class SearchAgent:
         goal_pos,
         walls,
         grid_size,
-        heuristic_type='manhattan'
+        heuristic_type='manhattan',
+        tile_facts=None
     ):
+        # No tile facts preserves the earlier Practical 04 A* behaviour.
+        tile_facts = {} if tile_facts is None else tile_facts
         width, height = grid_size
         walls_set = set(walls)
 
@@ -318,6 +326,15 @@ class SearchAgent:
                 )
 
                 if valid_position:
+                    # Reachable does not necessarily mean logically feasible.
+                    # Reset per tile so deductions cannot leak into another tile.
+                    self.kb.clear_facts()
+                    for fact in tile_facts.get(next_pos, []):
+                        self.kb.tell_fact(fact)
+                    self.kb.forward_chain()
+                    if 'Retreat' in self.kb.facts:
+                        continue
+
                     new_g = g_cost + 1
                     new_h = heuristic(next_pos, goal_pos)
                     new_f = new_g + new_h
@@ -380,13 +397,30 @@ class SearchAgent:
                     grid_size
                 )
             elif self.active_algo == 'AStar':
-                self.plan = self.astar_search(
-                    self.current_pos,
-                    closest_food,
-                    walls,
-                    grid_size,
-                    heuristic_type='manhattan'
-                )
+                # The game does not supply these domain facts. Use the lab's
+                # sample map, or an explicit tile_facts map supplied by a caller.
+                tile_facts = percept.get('tile_facts', {
+                    (1, 0): ['TargetVisible', 'HasDust', 'BloodseekerMissing'],
+                    (0, 1): ['TargetVisible', 'HasDust'],
+                })
+                # A forbidden or unreachable nearest pellet should not stop us
+                # from collecting other food that has a feasible path.
+                for candidate in sorted(
+                    all_food,
+                    key=lambda food: self.manhattan_distance(self.current_pos, food)
+                ):
+                    candidate_plan = self.astar_search(
+                        self.current_pos,
+                        candidate,
+                        walls,
+                        grid_size,
+                        heuristic_type='manhattan',
+                        tile_facts=tile_facts
+                    )
+                    if candidate_plan is not None:
+                        closest_food = candidate
+                        self.plan = candidate_plan
+                        break
             else:
                 raise ValueError(
                     f"Unknown search algorithm: {self.active_algo}"
